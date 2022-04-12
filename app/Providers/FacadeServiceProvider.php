@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\LoanService;
 use Illuminate\Support\ServiceProvider;
 
 class FacadeServiceProvider extends ServiceProvider
@@ -13,7 +14,9 @@ class FacadeServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        $this->app->bind('LoanService', function (){
+            return new  LoanService('32423423');
+        });
     }
 
     /**

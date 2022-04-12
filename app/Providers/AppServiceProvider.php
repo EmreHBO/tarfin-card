@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Services\LoanService;
+
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -14,9 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->bind('LoanService', function (){
-            return new  LoanService('32423423');
-        });
+
     }
 
     /**

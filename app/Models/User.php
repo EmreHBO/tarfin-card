@@ -9,8 +9,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Passport\HasApiTokens;
 
-/**
- * @mixin IdeHelperUser
+/*/**
+ * @mixin IdeHelperUser // Not needed for me
  */
 class User extends Authenticatable
 {
@@ -63,6 +63,16 @@ class User extends Authenticatable
     public function tarfinCards(): HasMany
     {
         return $this->hasMany(TarfinCard::class);
+    }
+
+    /**
+     * An User has many Loans.
+     *
+     * @return HasMany
+     */
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class);
     }
 
     // endregion
