@@ -15,7 +15,7 @@ class FacadeServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->bind('LoanService', function (){
-            return new  LoanService('32423423');
+            return new  LoanService(rand(0,99999));
         });
     }
 
