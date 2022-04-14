@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Constants\PaymentStatus;
+use App\Exceptions\AmountHigherThanOutstandingAmountException;
 use App\Models\Loan;
 use App\Models\ScheduledRepayment;
 use Illuminate\Support\Carbon;
@@ -65,27 +66,27 @@ class LoanService
     {
 
         $scheduledRepayment = ScheduledRepayment::where(['loan_id' => $loan->id, 'due_date' => $receivedAt])->get();
-        $scheduledOutstanding = $scheduledRepayment->outstanding_amount;
-        if ($scheduledOutstanding - $receivedRepayment == 0){
-            $scheduledOutstanding = 0;
+        $scheduledRepaymentId = $scheduledRepayment[0]['id'];
+        $scheduledRepayment = ScheduledRepayment::find($scheduledRepaymentId);
+        //dd((int)$scheduledRepayment->outstanding_amount);
+
+        if ($scheduledRepayment->outstanding_amount - $receivedRepayment == 0){
+            $scheduledRepayment->outstanding_amount = 0;
             $scheduledRepayment->status = PaymentStatus::REPAID;
         }
-        elseif ($scheduledOutstanding - $receivedRepayment > 0) {
-            $scheduledOutstanding = $scheduledOutstanding - $receivedRepayment;
-            $scheduledRepayment->status = PaymentStatus::DUE;
+        elseif ($scheduledRepayment->outstanding_amount - $receivedRepayment > 0) {
+            $scheduledRepayment->outstanding_amount = $scheduledRepayment->outstanding_amount - $receivedRepayment;
+            $scheduledRepayment->status = PaymentStatus::PARTIAL;
         }
         else {
-            $scheduledOutstanding = $scheduledOutstanding - $receivedRepayment;
-            $scheduledRepayment->status = PaymentStatus::DUE;
+            throw new AmountHigherThanOutstandingAmountException();
         }
-
-       // dd($scheduledRepayment, $scheduledOutstanding);
-
-
+        $scheduledRepayment->save();
+       // dd($scheduledRepayment, $scheduledRepayment->outstanding_amount);
 
         $loan = Loan::find($loan->id);
-        $outstandingAmount = $loan->outstanding_amount;
-        $loan->outstanding_amount = $outstandingAmount - $receivedRepayment;
+        $loanOutstanding = $loan->outstanding_amount;
+        $loan->outstanding_amount = $loanOutstanding - $receivedRepayment;
         $loan->save();
 
         return $loan;
