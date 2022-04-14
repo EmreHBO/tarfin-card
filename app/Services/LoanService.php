@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Constants\PaymentStatus;
 use App\Exceptions\AmountHigherThanOutstandingAmountException;
 use App\Models\Loan;
+use App\Models\ReceivedRepayment;
 use App\Models\ScheduledRepayment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +65,12 @@ class LoanService
 
     public function repayLoan($loan, $receivedRepayment, $currencyCode, $receivedAt)
     {
+        $loan = ReceivedRepayment::create(array(
+            "loan_id" => $loan->id,
+            "amount" => $receivedRepayment,
+            "currency_code" => $currencyCode,
+            "received_at" => $receivedAt,
+        ));
 
         $scheduledRepayment = ScheduledRepayment::where(['loan_id' => $loan->id, 'due_date' => $receivedAt])->get();
         $scheduledRepaymentId = $scheduledRepayment[0]['id'];
