@@ -6,6 +6,7 @@ use App\Constants\PaymentStatus;
 use App\Models\Loan;
 use App\Models\ScheduledRepayment;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class LoanService
 {
@@ -60,8 +61,34 @@ class LoanService
         return $loan;
     }
 
-    public function repayLoan(Loan $loan, int $receivedRepayment, string $currencyCode, $receivedAt)
+    public function repayLoan($loan, $receivedRepayment, $currencyCode, $receivedAt)
     {
-        return 'repayLoan';
+
+        $scheduledRepayment = ScheduledRepayment::where(['loan_id' => $loan->id, 'due_date' => $receivedAt])->get();
+        $scheduledOutstanding = $scheduledRepayment->outstanding_amount;
+        if ($scheduledOutstanding - $receivedRepayment == 0){
+            $scheduledOutstanding = 0;
+            $scheduledRepayment->status = PaymentStatus::REPAID;
+        }
+        elseif ($scheduledOutstanding - $receivedRepayment > 0) {
+            $scheduledOutstanding = $scheduledOutstanding - $receivedRepayment;
+            $scheduledRepayment->status = PaymentStatus::DUE;
+        }
+        else {
+            $scheduledOutstanding = $scheduledOutstanding - $receivedRepayment;
+            $scheduledRepayment->status = PaymentStatus::DUE;
+        }
+
+       // dd($scheduledRepayment, $scheduledOutstanding);
+
+
+
+        $loan = Loan::find($loan->id);
+        $outstandingAmount = $loan->outstanding_amount;
+        $loan->outstanding_amount = $outstandingAmount - $receivedRepayment;
+        $loan->save();
+
+        return $loan;
     }
+
 }
