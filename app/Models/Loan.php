@@ -13,14 +13,8 @@ class Loan extends Model
 
     protected $table = 'loans';
 
-    protected $fillable = [
-        'user_id',
-        'amount',
-        'currency_code',
-        'terms',
-        'outstanding_amount',
-        'status',
-        'processed_at',
+    protected $guarded =[
+        'id',
     ];
 
     public $timestamps = false;

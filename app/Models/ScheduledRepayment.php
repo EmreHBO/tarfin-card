@@ -12,13 +12,8 @@ class ScheduledRepayment extends Model
 
     protected $table = 'scheduled_repayments';
 
-    protected $fillable = [
-        'loan_id',
-        'amount',
-        'outstanding_amount',
-        'currency_code',
-        'due_date',
-        'status',
+    protected $guarded =[
+        'id',
     ];
 
 

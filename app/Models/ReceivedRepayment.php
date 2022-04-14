@@ -20,6 +20,6 @@ class ReceivedRepayment extends Model
 
     public function scheduledRepayment(): BelongsTo
     {
-        return $this->belongsTo(Loan::class);
+        return $this->belongsTo(ScheduledRepayment::class);
     }
 }
