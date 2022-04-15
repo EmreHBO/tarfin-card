@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Constants\PaymentStatus;
+use App\Exceptions\AlreadyRepaidException;
 use App\Exceptions\AmountHigherThanOutstandingAmountException;
 use App\Models\Loan;
 use App\Models\ReceivedRepayment;
 use App\Models\ScheduledRepayment;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Models\User;
 
 class LoanService
 {
@@ -22,18 +22,16 @@ class LoanService
         $this->secretKey = $secretKey;
     }
 
-    // public array $scheduledRepayments;
-
     /**
-     * @param $user
-     * @param $amount
-     * @param $currencyCode
-     * @param $terms
+     * @param User $user
+     * @param int $amount
+     * @param string $currencyCode
+     * @param int $terms
      * @param $processedAt
      * @param string $status
      * @return mixed
      */
-    public function createLoan($user, $amount, $currencyCode, $terms, $processedAt, $status = PaymentStatus::DUE)
+    public function createLoan(User $user, int $amount, string $currencyCode, int $terms, $processedAt, string $status = PaymentStatus::DUE): mixed
     {
 
         $loan = Loan::create(array(
@@ -48,8 +46,10 @@ class LoanService
 
         $installment = $minInstallment = floor($amount / $terms);
         for ($index = 0; $index < $terms; $index++) {
-            $maxInstallment = $amount-($minInstallment*($terms-1));
-            if($index == $terms-1){$installment = $maxInstallment;}
+            $maxInstallment = $amount - ($minInstallment * ($terms - 1));
+            if ($index == $terms - 1) {
+                $installment = $maxInstallment;
+            }
             $scheduledRepayment = ScheduledRepayment::create(array(
                 "loan_id" => $loan->id,
                 "amount" => $installment,
@@ -63,40 +63,70 @@ class LoanService
         return $loan;
     }
 
-    public function repayLoan($loan, $receivedRepayment, $currencyCode, $receivedAt)
+    /**
+     * @param Loan $loan
+     * @param int $receivedRepayment
+     * @param string $currencyCode
+     * @param $receivedAt
+     * @return Loan
+     * @throws AlreadyRepaidException
+     * @throws AmountHigherThanOutstandingAmountException
+     */
+    public function repayLoan(Loan $loan, int $receivedRepayment, string $currencyCode, $receivedAt)
     {
-        $loan = ReceivedRepayment::create(array(
-            "loan_id" => $loan->id,
-            "amount" => $receivedRepayment,
-            "currency_code" => $currencyCode,
-            "received_at" => $receivedAt,
-        ));
-
-        $scheduledRepayment = ScheduledRepayment::where(['loan_id' => $loan->id, 'due_date' => $receivedAt])->get();
-        $scheduledRepaymentId = $scheduledRepayment[0]['id'];
-        $scheduledRepayment = ScheduledRepayment::find($scheduledRepaymentId);
-        //dd((int)$scheduledRepayment->outstanding_amount);
-
-        if ($scheduledRepayment->outstanding_amount - $receivedRepayment == 0){
-            $scheduledRepayment->outstanding_amount = 0;
-            $scheduledRepayment->status = PaymentStatus::REPAID;
+        if ($loan->status == PaymentStatus::REPAID) {
+            throw new AlreadyRepaidException();
         }
-        elseif ($scheduledRepayment->outstanding_amount - $receivedRepayment > 0) {
-            $scheduledRepayment->outstanding_amount = $scheduledRepayment->outstanding_amount - $receivedRepayment;
-            $scheduledRepayment->status = PaymentStatus::PARTIAL;
-        }
-        else {
-            throw new AmountHigherThanOutstandingAmountException();
-        }
-        $scheduledRepayment->save();
-       // dd($scheduledRepayment, $scheduledRepayment->outstanding_amount);
 
-        $loan = Loan::find($loan->id);
         $loanOutstanding = $loan->outstanding_amount;
-        $loan->outstanding_amount = $loanOutstanding - $receivedRepayment;
-        $loan->save();
 
-        return $loan;
+        $scheduledRepayment = $loan->scheduledRepayments()->where('status', '<>', PaymentStatus::REPAID)->first();
+
+        if (is_null($scheduledRepayment)) {
+            throw new AlreadyRepaidException();
+        }
+
+        $scheduledOutstanding = $scheduledRepayment->outstanding_amount;
+
+        //dd($receivedAt,$scheduledRepayment->due_date,$loanOutstanding,$scheduledOutstanding, $receivedRepayment);  /*2022-04-20 00:00:00 , 1668*/
+        if ($receivedRepayment > $loanOutstanding) {
+            throw new AmountHigherThanOutstandingAmountException();
+        } else {
+            if ($scheduledOutstanding == $receivedRepayment) {
+                $scheduledRepayment->status = PaymentStatus::REPAID;
+                $scheduledOutstanding = 0;
+                $loanOutstanding -= $receivedRepayment;
+                if ($loanOutstanding == 0) {
+                    $loan->status = PaymentStatus::REPAID;
+                }
+            } else if ($scheduledOutstanding > $receivedRepayment) {
+                $scheduledOutstanding -= $receivedRepayment;
+                $scheduledRepayment->status = PaymentStatus::PARTIAL;
+                $loanOutstanding -= $receivedRepayment;
+            } else {
+                $diff = $receivedRepayment - $scheduledOutstanding;
+                $nextScheduledRepayment = $loan->scheduledRepayments()->where('id', '>', $scheduledRepayment->id)->first();
+                $nextScheduledRepayment->update(['status' => PaymentStatus::PARTIAL, 'outstanding_amount' => $nextScheduledRepayment->outstanding_amount - $diff]);
+
+                $scheduledRepayment->status = PaymentStatus::REPAID;
+                $loanOutstanding -= ($scheduledOutstanding + $diff);
+                $scheduledOutstanding = 0;
+            }
+
+            $loan->outstanding_amount = $loanOutstanding;
+            $scheduledRepayment->outstanding_amount = $scheduledOutstanding;
+
+            $scheduledRepayment->save();
+            $loan->save();
+
+            ReceivedRepayment::create(array(
+                "loan_id" => $loan->id,
+                "amount" => $receivedRepayment,
+                "currency_code" => $currencyCode,
+                "received_at" => $receivedAt,
+            ));
+
+            return $loan;
+        }
     }
-
 }
